@@ -1,0 +1,183 @@
+# Gmail Flight Tracker Development Plan
+
+## Project Overview
+Build a tool to automatically extract and aggregate flight information from multiple Gmail accounts, creating a consolidated travel history with minimal manual input.
+
+## Phase 1: Basic Infrastructure Setup
+
+### 1.1 Google Cloud & Authentication Setup
+Instructions for AI agent: "Help me set up the Google Cloud infrastructure for this project."
+- Create new Google Cloud Project
+- Enable Gmail API
+- Set up OAuth 2.0 credentials
+- Create configuration template for multiple accounts
+- Implement secure credential storage
+
+### 1.2 Email Processing Foundation
+Instructions for AI agent: "Let's build the core email processing functionality."
+- Implement Gmail API connection
+- Create email search functionality
+- Build basic email content extraction
+- Set up error handling and logging
+- Implement rate limiting for API calls
+
+## Phase 2: Flight Information Extraction
+
+### 2.1 Pattern Recognition Development
+Instructions for AI agent: "Help me create pattern matching for different airline email formats."
+- Analyze common airline email formats
+- Create regex patterns for:
+  - Flight numbers
+  - Departure/arrival airports
+  - Times and dates
+  - Ticket numbers
+  - Passenger names
+- Implement airline-specific extractors
+- Add format detection logic
+
+### 2.2 Data Structure Design
+Instructions for AI agent: "Design the data structure for storing flight information."
+- Define flight information schema
+- Create data validation rules
+- Implement data cleaning functions
+- Add metadata tracking (source email, account, extraction confidence)
+
+## Phase 3: Multi-Account Management
+
+### 3.1 Account Configuration
+Instructions for AI agent: "Help me implement multi-account management."
+- Create account configuration system
+- Implement parallel processing
+- Add account-specific settings
+- Create account validation checks
+- Implement connection pooling
+
+### 3.2 Data Aggregation
+Instructions for AI agent: "Let's build the data aggregation system."
+- Implement data merging logic
+- Create deduplication system
+- Add conflict resolution
+- Implement data normalization
+- Create aggregate statistics
+
+## Phase 4: Output and Analysis
+
+### 4.1 Data Export
+Instructions for AI agent: "Create export functionality for the flight data."
+- Implement CSV export
+- Add JSON export option
+- Create summary reports
+- Add data filtering options
+- Implement custom export templates
+
+### 4.2 Analysis Features
+Instructions for AI agent: "Add analysis capabilities to the flight data."
+- Calculate travel statistics
+- Generate visualizations
+- Create timeline views
+- Add CO2 emission calculations
+- Generate travel reports
+
+## Phase 5: Enhancement and Optimization
+
+### 5.1 Performance Optimization
+Instructions for AI agent: "Help me optimize the system's performance."
+- Implement caching
+- Add incremental processing
+- Optimize API usage
+- Improve error recovery
+- Add progress tracking
+
+### 5.2 Feature Enhancement
+Instructions for AI agent: "Let's add advanced features to the system."
+- Add support for calendar integration
+- Implement travel pattern analysis
+- Create travel prediction
+- Add expense tracking
+- Implement route optimization suggestions
+
+## Implementation Notes
+
+### AI Agent Communication Tips
+1. Break down tasks into specific, actionable requests
+2. Provide example data when discussing pattern matching
+3. Start with basic functionality and iterate
+4. Request code reviews and optimization suggestions
+5. Ask for error handling recommendations
+
+### Testing Strategy
+1. Unit tests for each component
+2. Integration tests for API communication
+3. Pattern matching accuracy tests
+4. Performance benchmarks
+5. Multi-account scenario testing
+
+### Error Handling Priorities
+1. API rate limits and quotas
+2. Authentication failures
+3. Pattern matching errors
+4. Data validation issues
+5. Export/import errors
+
+### Security Considerations
+1. Secure credential storage
+2. API key management
+3. Data encryption
+4. Access control
+5. Audit logging
+
+## Iteration Plan
+
+### MVP Features
+1. Single account support
+2. Basic flight information extraction
+3. CSV export
+4. Simple error handling
+5. Basic logging
+
+### Version 1.0 Features
+1. Multi-account support
+2. Enhanced pattern matching
+3. Data deduplication
+4. Basic analysis
+5. Error recovery
+
+### Future Enhancements
+1. Machine learning for pattern recognition
+2. Real-time processing
+3. Mobile app integration
+4. Travel optimization suggestions
+5. Expense tracking integration
+
+
+# Context on development assistance
+
+You are AI model built into the IDE. The user will see your outputs in a chat UI that is integrated into this IDE, and expects you to have knowledge of the project. You will be provided with code snippets and project metadata. You should answer as if you’re the intelligence built into the IDE.
+
+# General Instructions
+
+## Role and Expertise:
+
+You are an expert in modern AI, web and mobile development technologies. You excel at selecting the best tools for the task and avoiding unnecessary duplication and complexity. You act as a professional in any field related to the topic at hand.
+
+## Approach:
+
+### Code and Planning:
+
+This section applies when working on the code.
+
+* Before suggesting code, conduct a deep-dive review of the existing code and describe how it works within <CODE_REVIEW> tags.
+* After the review, provide a detailed plan for changes within <PLANNING> tags.
+* Maintain consistency in variable names and string literals unless changes are necessary or directed.
+* When naming by convention, use double colons and uppercase (e.g., ::EXAMPLE::).
+* Produce outputs that balance solving the immediate problem with remaining generic and flexible.
+* When writing code strictly follow The Clean Code principles from the book written by Robert C. Martin.
+
+### Communication:
+
+* When making suggestions, divide them into discrete changes and propose small tests after each stage to ensure progress is on track.
+* Always ask for clarifications if anything is unclear or ambiguous.
+* Discuss trade-offs and implementation options when choices need to be made.
+* Keep responses unique and avoid repetition.
+* Refrain from apologies or expressions of remorse.
+
