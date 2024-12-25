@@ -1,97 +1,99 @@
 # Gmail Flight Tracker
 
-A Python tool to automatically extract and aggregate flight information from Gmail accounts, creating a consolidated travel history.
+A Python tool to automatically extract and aggregate flight information from Gmail, creating a consolidated travel history with minimal manual input.
 
 ## Features
 
-- Multi-account support for processing multiple Gmail accounts
-- Automatic flight information extraction from email content
-- Support for various airline email formats
-- Data export in both CSV and JSON formats
-- Incremental processing to avoid duplicate entries
-- Secure credential management
+- Automatically fetches flight-related emails from Gmail
+- Supports multiple email formats (VietJet Air, Trip.com, Booking.com)
+- Extracts key flight information:
+  - Flight numbers
+  - Departure/arrival airports
+  - Times and dates
+  - Airlines
+  - Duration
+- Deduplicates flight entries
+- Provides clean, formatted output
 
 ## Setup
 
-1. Create a Google Cloud Project:
-   - Go to [Google Cloud Console](https://console.cloud.google.com)
-   - Create a new project
-   - Enable the Gmail API
-   - Create OAuth 2.0 credentials
-   - Download the credentials JSON file
-
-2. Install Dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Configure Accounts:
-   - Place your OAuth credentials in the `credentials/` directory
-   - Name the file as `{account_id}_credentials.json` (e.g., `primary_credentials.json`)
-   - Update `config/accounts.json` with your account information
-
-## Configuration
-
-The `config/accounts.json` file should contain an array of account configurations:
-
-```json
-[
-    {
-        "account_id": "primary",
-        "email": "your.email@gmail.com",
-        "last_processed_date": null
-    }
-]
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/gmail-flight-tracker.git
+cd gmail-flight-tracker
 ```
+
+2. Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Set up Google Cloud Project and Gmail API:
+
+   a. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+   
+   b. Create a new project or select an existing one
+   
+   c. Enable the Gmail API:
+      - Go to "APIs & Services" > "Library"
+      - Search for "Gmail API"
+      - Click "Enable"
+   
+   d. Create credentials:
+      - Go to "APIs & Services" > "Credentials"
+      - Click "Create Credentials" > "OAuth client ID"
+      - Choose "Desktop app" as the application type
+      - Download the credentials file
+   
+   e. Place the downloaded credentials file in the `credentials` directory:
+      ```bash
+      mkdir -p credentials
+      mv path/to/downloaded/credentials.json credentials/
+      ```
 
 ## Usage
 
-Run the flight tracker:
+Run the script with the following options:
 
 ```bash
+# Search for flights in the current year
 python src/main.py
+
+# Search for flights in a specific year
+python src/main.py --year 2024
+
+# Search for flights in a specific period
+python src/main.py --year 2024 --days 90
+
+# Use sample data instead of Gmail API
+python src/main.py --use-sample
 ```
 
-The script will:
-1. Process each configured account
-2. Extract flight information from emails
-3. Save the data to both CSV and JSON formats in the `data/` directory
+### Command-line Arguments
 
-## Output
+- `--year`: Year to search for flights (default: current year)
+- `--days`: Number of days to look forward from start of year (default: 365)
+- `--use-sample`: Use sample data instead of Gmail API
 
-The tool generates two types of output files in the `data/` directory:
-- `flights_YYYYMMDD_HHMMSS.csv`: CSV format for easy spreadsheet analysis
-- `flights_YYYYMMDD_HHMMSS.json`: JSON format for programmatic access
+## First Run
 
-## Directory Structure
+On the first run, the script will:
+1. Open your default web browser
+2. Ask you to log in to your Google account
+3. Request permission to read your Gmail messages
+4. Save the authorization token for future use
 
-```
-gmail-flight-tracker/
-├── config/
-│   └── accounts.json
-├── credentials/
-│   └── primary_credentials.json
-├── data/
-│   └── flights_*.{csv,json}
-├── logs/
-├── src/
-│   ├── auth/
-│   │   ├── google_auth.py
-│   │   └── gmail_client.py
-│   ├── parsers/
-│   │   └── flight_parser.py
-│   └── main.py
-├── tests/
-├── requirements.txt
-└── README.md
-```
+The token will be stored in `credentials/token.pickle` and will be reused for subsequent runs.
 
-## Security
+## Sample Data
 
-- OAuth credentials are stored locally in the `credentials/` directory
-- Access tokens are securely cached
-- No email content is stored, only extracted flight information
-- Credentials can be revoked at any time through Google Account settings
+The repository includes sample email data in the `data/sample` directory for testing purposes. Use the `--use-sample` flag to process these instead of fetching from Gmail.
 
 ## Contributing
 

@@ -3,184 +3,159 @@
 # Main entry point for the Gmail Flight Tracker
 """
 
-import json
-import logging
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-import pandas as pd
 import argparse
+from datetime import datetime, timedelta
+import json
+import os
+from typing import List, Dict
+from parsers.flight_parser import parse_flight_email, format_flight_details
+from gmail_client import fetch_flight_emails
+import re
 
-from auth.google_auth import GoogleAuthManager
-from auth.gmail_client import GmailClient
-from parsers.flight_parser import FlightParser
+def process_emails(emails: List[Dict]) -> List[Dict]:
+    """Process emails and extract flight information"""
+    flight_info_list = []
+    
+    for email in emails:
+        print(f"\nProcessing email: {email.get('subject')}")
+        flight_info = parse_flight_email(email)
+        if flight_info:
+            flight_dict = flight_info.to_dict()
+            print("Extracted flight info:")
+            print(format_flight_details(flight_dict))
+            flight_info_list.append(flight_dict)
+        else:
+            print("No flight information extracted")
+    
+    # Remove duplicates
+    return deduplicate_flights(flight_info_list)
 
-# Set up logging with more detailed format
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(funcName)s] %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('logs/flight_tracker.log')
-    ]
-)
-logger = logging.getLogger(__name__)
-
-class FlightTracker:
-    def __init__(self, config_path: str = "config/accounts.json", year: Optional[int] = None):
-        """Initialize the flight tracker with configuration."""
-        logger.info("Initializing FlightTracker")
-        self.config_path = Path(config_path)
-        self.auth_manager = GoogleAuthManager()
-        self.flight_parser = FlightParser()
-        self.year = year
-        self.accounts = self._load_accounts()
+def deduplicate_flights(flights: List[Dict]) -> List[Dict]:
+    """Remove duplicate flight entries based on key fields"""
+    unique_flights = {}
+    
+    for flight in flights:
+        # Create a unique key based on flight details
+        key_parts = []
         
-        # Create required directories
-        self.data_dir = Path("data")
-        self.data_dir.mkdir(exist_ok=True)
-        Path("logs").mkdir(exist_ok=True)
-        
-        logger.info(f"FlightTracker initialized with year filter: {year if year else 'None'}")
-
-    def _load_accounts(self) -> List[Dict[str, Any]]:
-        """Load account configurations from the config file."""
-        try:
-            logger.info(f"Loading accounts from {self.config_path}")
-            with open(self.config_path) as f:
-                accounts = json.load(f)
-            logger.info(f"Successfully loaded {len(accounts)} account(s)")
-            return accounts
-        except FileNotFoundError:
-            logger.error(f"Config file not found at {self.config_path}")
-            return []
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in config file {self.config_path}")
-            return []
-
-    def process_account(self, account: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Process emails from a single account."""
-        account_id = account['account_id']
-        logger.info(f"Processing account: {account_id}")
-        
-        try:
-            # Get credentials and create Gmail client
-            logger.debug(f"Getting credentials for account {account_id}")
-            credentials = self.auth_manager.get_credentials(account_id)
-            gmail_client = GmailClient(credentials)
+        # Required fields for a valid flight entry
+        if flight.get('flight_number') and flight.get('departure_datetime'):
+            key_parts.extend([
+                flight.get('flight_number'),
+                flight.get('departure_datetime', '').split('T')[0]
+            ])
             
-            # Build search query
-            query = "subject:(flight OR itinerary OR booking OR reservation OR e-ticket)"
+            # Optional fields that help identify unique flights
+            key_parts.extend([
+                flight.get('departure_airport', ''),
+                flight.get('arrival_airport', '')
+            ])
             
-            # Add year filter if specified
-            if self.year:
-                start_date = f"{self.year}/01/01"
-                end_date = f"{self.year}/12/31"
-                query += f" after:{start_date} before:{end_date}"
-            elif account.get('last_processed_date'):
-                query += f" after:{account['last_processed_date']}"
+            key = tuple(key_parts)
             
-            logger.info(f"Searching emails with query: {query}")
-            messages = gmail_client.search_messages(query)
-            logger.info(f"Found {len(messages)} matching emails")
-            
-            flight_data = []
-            processed_count = 0
-            
-            for msg in messages:
-                processed_count += 1
-                if processed_count % 10 == 0:  # Log progress every 10 messages
-                    logger.info(f"Processing message {processed_count}/{len(messages)}")
-                
-                message_detail = gmail_client.get_message(msg['id'])
-                if not message_detail:
-                    logger.warning(f"Could not fetch details for message {msg['id']}")
-                    continue
-                
-                content = gmail_client.parse_message_content(message_detail)
-                content['id'] = msg['id']
-                
-                flight_info = self.flight_parser.parse_email(content)
-                if flight_info:
-                    logger.debug(f"Successfully extracted flight info: {flight_info['flight_number']}")
-                    flight_info['account_id'] = account_id
-                    flight_data.append(flight_info)
-                else:
-                    logger.debug(f"No flight information found in message {msg['id']}")
-            
-            logger.info(f"Successfully processed {len(flight_data)} flights from {len(messages)} emails")
-            return flight_data
-            
-        except Exception as e:
-            logger.error(f"Error processing account {account_id}: {e}", exc_info=True)
-            return []
+            # Keep the entry with the most information
+            if key not in unique_flights or _count_filled_fields(flight) > _count_filled_fields(unique_flights[key]):
+                unique_flights[key] = flight
+    
+    # Sort flights by departure datetime
+    sorted_flights = sorted(
+        unique_flights.values(),
+        key=lambda x: x.get('departure_datetime', '') or ''
+    )
+    
+    return sorted_flights
 
-    def process_all_accounts(self) -> None:
-        """Process all configured accounts and save the results."""
-        logger.info("Starting to process all accounts")
-        all_flight_data = []
-        
-        for account in self.accounts:
-            flight_data = self.process_account(account)
-            all_flight_data.extend(flight_data)
-        
-        if all_flight_data:
-            self._save_flight_data(all_flight_data)
-            if not self.year:  # Only update last processed date if not filtering by year
-                self._update_last_processed_dates()
-        
-        logger.info(f"Completed processing with {len(all_flight_data)} total flights found")
-
-    def _save_flight_data(self, flight_data: List[Dict[str, Any]]) -> None:
-        """Save flight data to CSV and JSON formats."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        year_suffix = f"_{self.year}" if self.year else ""
-        
-        # Save as JSON
-        json_path = self.data_dir / f"flights{year_suffix}_{timestamp}.json"
-        with open(json_path, 'w') as f:
-            json.dump(flight_data, f, indent=2)
-        
-        # Save as CSV
-        df = pd.DataFrame(flight_data)
-        csv_path = self.data_dir / f"flights{year_suffix}_{timestamp}.csv"
-        df.to_csv(csv_path, index=False)
-        
-        logger.info(f"Saved flight data to {json_path} and {csv_path}")
-
-    def _update_last_processed_dates(self) -> None:
-        """Update the last processed date for each account."""
-        logger.info("Updating last processed dates")
-        current_date = datetime.now().strftime("%Y/%m/%d")
-        
-        for account in self.accounts:
-            account['last_processed_date'] = current_date
-        
-        with open(self.config_path, 'w') as f:
-            json.dump(self.accounts, f, indent=2)
-        logger.info("Successfully updated last processed dates")
+def _count_filled_fields(flight: Dict) -> int:
+    """Count the number of non-None fields in a flight entry"""
+    return sum(1 for value in flight.values() if value is not None)
 
 def main():
-    """Main entry point for the flight tracker."""
-    try:
-        # Set up argument parser
-        parser = argparse.ArgumentParser(description='Gmail Flight Tracker')
-        parser.add_argument('--year', type=int, help='Year to filter flight data (e.g., 2023)')
-        parser.add_argument('--debug', action='store_true', help='Enable debug logging')
-        args = parser.parse_args()
+    parser = argparse.ArgumentParser(description='Gmail Flight Tracker')
+    parser.add_argument('--year', type=int, default=datetime.now().year,
+                      help='Year to search for flights (default: current year)')
+    parser.add_argument('--days', type=int, default=365,
+                      help='Number of days to look forward from start of year')
+    parser.add_argument('--use-sample', action='store_true',
+                      help='Use sample data instead of Gmail API')
+    args = parser.parse_args()
+    
+    print(f"Loading emails for {args.year} (looking forward {args.days} days from start of year)...")
+    
+    if args.use_sample:
+        # Load sample data
+        sample_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'sample')
+        if not os.path.exists(sample_dir):
+            print(f"Error: Sample directory not found at {sample_dir}")
+            return
+            
+        emails = []
+        start_date = datetime(args.year, 1, 1)
+        end_date = start_date + timedelta(days=args.days)
+        print(f"Looking for emails between {start_date.date()} and {end_date.date()}")
+        
+        for filename in os.listdir(sample_dir):
+            if filename.endswith('.json'):
+                file_path = os.path.join(sample_dir, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        email_data = json.load(f)
+                        
+                        # Parse email date
+                        email_date = datetime.strptime(email_data.get('date', ''), '%a, %d %b %Y %H:%M:%S %z')
+                        
+                        # Extract flight date from body for more accurate filtering
+                        body = email_data.get('body', '')
+                        flight_date = None
+                        
+                        # Try to find flight date in common formats
+                        date_patterns = [
+                            r'(\w+ \d{1,2}, \d{4})\s*\|',  # March 19, 2024 |
+                            r'Flight Date:?\s*(\w+ \d{1,2},? \d{4})',  # Flight Date: March 19, 2024
+                            r'Departure:?\s*(\w+ \d{1,2},? \d{4})',  # Departure: March 19, 2024
+                            r'(\d{2}/\d{2}/\d{4})'  # 15/02/2024
+                        ]
+                        
+                        for pattern in date_patterns:
+                            match = re.search(pattern, body)
+                            if match:
+                                try:
+                                    date_str = match.group(1)
+                                    if '/' in date_str:
+                                        flight_date = datetime.strptime(date_str, '%d/%m/%Y')
+                                    else:
+                                        flight_date = datetime.strptime(date_str, '%B %d, %Y')
+                                    break
+                                except ValueError:
+                                    continue
+                        
+                        # Use flight date if found, otherwise use email date
+                        check_date = flight_date.replace(tzinfo=None) if flight_date else email_date.replace(tzinfo=None)
+                        
+                        # Check if date is within range
+                        if start_date <= check_date <= end_date:
+                            print(f"Found matching email: {email_data.get('subject')} (Date: {check_date.date()})")
+                            emails.append(email_data)
+                except Exception as e:
+                    print(f"Error loading {filename}: {str(e)}")
+                    continue
+        
+        print(f"Found {len(emails)} emails in the specified date range")
+    else:
+        # Use Gmail API
+        emails = fetch_flight_emails(args.year, args.days)
+    
+    print("\nProcessing emails...")
+    flights = process_emails(emails)
+    
+    if flights:
+        print(f"\nFound {len(flights)} unique flights:\n")
+        for i, flight in enumerate(flights, 1):
+            print(f"Flight {i}:")
+            print("-" * 40)
+            print(format_flight_details(flight))
+            print()
+    else:
+        print("\nNo flight information found in the specified date range.")
 
-        # Set debug logging if requested
-        if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
-            logger.debug("Debug logging enabled")
-
-        logger.info(f"Starting Gmail Flight Tracker{' for year ' + str(args.year) if args.year else ''}")
-        tracker = FlightTracker(year=args.year)
-        tracker.process_all_accounts()
-        logger.info("Gmail Flight Tracker completed successfully")
-    except Exception as e:
-        logger.error(f"Error running flight tracker: {e}", exc_info=True)
-        raise
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
