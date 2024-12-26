@@ -12,6 +12,9 @@ A Python tool to automatically extract and aggregate flight information from Gma
   - Times and dates
   - Airlines
   - Duration
+- Two-step process:
+  1. Fetch and store raw emails
+  2. Process stored emails to extract flight information
 - Deduplicates flight entries
 - Provides clean, formatted output
 
@@ -59,27 +62,50 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the script with the following options:
+The tool now supports a two-step process for better control and debugging:
+
+### 1. Fetch Emails
+
+To fetch emails and store them locally:
 
 ```bash
-# Search for flights in the current year
-python src/main.py
-
-# Search for flights in a specific year
-python src/main.py --year 2024
-
-# Search for flights in a specific period
-python src/main.py --year 2024 --days 90
-
-# Use sample data instead of Gmail API
-python src/main.py --use-sample
+python src/main.py --year 2024 --days 365 --fetch-only
 ```
 
-### Command-line Arguments
+This will:
+- Fetch flight-related emails from Gmail
+- Store them in `data/raw_emails/emails_YYYY_TIMESTAMP.json`
+- Not process the emails yet
+
+### 2. Process Stored Emails
+
+To process previously stored emails:
+
+```bash
+python src/main.py --year 2024 --process-only
+```
+
+This will:
+- Load emails from storage
+- Extract flight information
+- Save results to `data/processed/flights_YYYY.json`
+- Display formatted results
+
+### Combined Operation
+
+To fetch and process in one go (default behavior):
+
+```bash
+python src/main.py --year 2024 --days 365
+```
+
+### Command Line Options
 
 - `--year`: Year to search for flights (default: current year)
 - `--days`: Number of days to look forward from start of year (default: 365)
 - `--use-sample`: Use sample data instead of Gmail API
+- `--fetch-only`: Only fetch and store emails, do not process them
+- `--process-only`: Only process stored emails, do not fetch new ones
 
 ## First Run
 
@@ -94,6 +120,23 @@ The token will be stored in `credentials/token.pickle` and will be reused for su
 ## Sample Data
 
 The repository includes sample email data in the `data/sample` directory for testing purposes. Use the `--use-sample` flag to process these instead of fetching from Gmail.
+
+## Project Structure
+
+```
+gmail-flight-tracker/
+├── data/
+│   ├── raw_emails/     # Stored raw emails
+│   ├── processed/      # Processed flight information
+│   └── sample/         # Sample email data
+├── src/
+│   ├── gmail_client.py # Gmail API client
+│   ├── main.py        # Main entry point
+│   ├── process_emails.py # Email processing script
+│   ├── storage/       # Email storage module
+│   └── parsers/       # Email parsers
+└── README.md
+```
 
 ## Contributing
 

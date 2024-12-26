@@ -22,31 +22,116 @@ class GmailClient:
         logger.debug("Gmail client initialized successfully")
 
     def search_messages(self, query: str, max_results: int = 500) -> List[Dict[str, Any]]:
-        """Search for messages matching the query."""
+        """
+        Search for messages matching the query with stricter flight-related criteria.
+        """
         try:
-            logger.debug(f"Searching messages with query: {query}")
+            # Strict flight-related terms that must be in subject or body
+            required_terms = [
+                'flight number',
+                'boarding pass',
+                'e-ticket',
+                'flight confirmation',
+                'itinerary',
+                'reservation #'
+            ]
+            
+            # Known airline domains and their variations
+            airline_domains = [
+                'vietjetair.com',
+                'airasia.com',
+                'vietnamairlines.com',
+                'cebu-pacific.com',
+                'united.com',
+                'delta.com',
+                'aa.com',
+                'emirates.com'
+            ]
+            
+            # Exclude terms that indicate non-flight content
+            exclude_terms = [
+                'hotel',
+                'booking.com',
+                'airbnb',
+                'newsletter',
+                'promotion',
+                'offer',
+                'deal',
+                'subscribe'
+            ]
+            
+            # Build enhanced query
+            enhanced_query = f"({query})"
+            enhanced_query += " AND ("
+            
+            # Add required terms
+            subject_terms = " OR ".join(f'subject:"{term}"' for term in required_terms)
+            enhanced_query += f"({subject_terms})"
+            
+            # Add airline domains
+            domain_terms = " OR ".join(f'from:@{domain}' for domain in airline_domains)
+            enhanced_query += f" OR ({domain_terms})"
+            
+            # Add exclusions
+            exclude_terms = " AND ".join(f'-subject:"{term}"' for term in exclude_terms)
+            enhanced_query += f") AND ({exclude_terms})"
+            
+            logger.debug(f"Enhanced search query: {enhanced_query}")
+            
             messages = []
             next_page_token = None
             
             while len(messages) < max_results:
                 result = self.service.users().messages().list(
                     userId='me',
-                    q=query,
-                    maxResults=min(max_results - len(messages), 100),  # Gmail API max page size is 100
+                    q=enhanced_query,
+                    maxResults=min(max_results - len(messages), 100),
                     pageToken=next_page_token
                 ).execute()
                 
                 if 'messages' in result:
-                    messages.extend(result['messages'])
-                    
+                    # Additional validation of messages
+                    for msg_info in result['messages']:
+                        msg = self.get_message(msg_info['id'])
+                        headers = {
+                            header['name'].lower(): header['value'].lower()
+                            for header in msg['payload']['headers']
+                        }
+                        
+                        subject = headers.get('subject', '').lower()
+                        from_addr = headers.get('from', '').lower()
+                        
+                        # Skip if from known non-flight sources
+                        if any(domain in from_addr for domain in ['booking.com', 'airbnb.com']):
+                            logger.debug(f"Skipping non-flight source: {from_addr}")
+                            continue
+                            
+                        # Skip promotional content
+                        if any(promo_term in subject for promo_term in ['newsletter', 'offer', 'deal']):
+                            logger.debug(f"Skipping promotional content: {subject}")
+                            continue
+                        
+                        # Must have either flight-specific terms or be from airline domain
+                        is_flight_related = (
+                            any(term.lower() in subject for term in required_terms) or
+                            any(domain in from_addr for domain in airline_domains)
+                        )
+                        
+                        if is_flight_related:
+                            messages.append(msg_info)
+                            logger.debug(f"Including flight-related message: {subject}")
+                        else:
+                            logger.debug(f"Filtering out non-flight message: {subject}")
+                
                 if 'nextPageToken' not in result:
                     break
                     
                 next_page_token = result['nextPageToken']
-                logger.debug(f"Fetched {len(messages)} messages so far, getting next page...")
+                logger.info(f"Fetched {len(messages)} flight-related messages so far...")
 
-            logger.info(f"Found {len(messages)} messages matching query")
-            return messages[:max_results]  # Ensure we don't exceed max_results
+            logger.info(f"Found {len(messages)} flight-related messages")
+            return messages[:max_results]
+            
         except Exception as e:
             logger.error(f"Error searching messages: {e}", exc_info=True)
             return []
